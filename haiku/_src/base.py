@@ -16,6 +16,7 @@
 
 import collections
 import contextlib
+import functools
 from typing import (Callable, Iterator, Iterable, MutableMapping, NamedTuple,
                     Optional, Set, Tuple, Union, Any, Sequence, Mapping,
                     FrozenSet)
@@ -193,19 +194,20 @@ def new_context(
   Returns:
     Context manager which closes over mutable Haiku internal state.
   """
+  ddict = functools.partial(collections.defaultdict, dict)
+
   if params is None:
-    params = collections.defaultdict(dict)
+    params = ddict()
     freeze_params = False
   else:
     params = data_structures.to_haiku_dict(params)
     freeze_params = True
 
   if state is None:
-    state = collections.defaultdict(dict)
+    state = ddict()
   else:
-    state = {m: {k: StatePair(v, v) for k, v in p.items()}
-             for m, p in state.items()}
-    state = collections.defaultdict(dict, state)
+    state = ddict({m: ddict({k: StatePair(v, v) for k, v in p.items()})
+                   for m, p in state.items()})
 
   if rng is not None and not isinstance(rng, PRNGSequence):
     rng = PRNGSequence(rng)

@@ -1060,6 +1060,8 @@ Managing State
     name_scope
     name_like
     lift
+    lift_with_state
+    LiftWithStateUpdater
 
 name_scope
 ~~~~~~~~~~
@@ -1070,6 +1072,16 @@ name_like
 ~~~~~~~~~
 
 .. autofunction:: name_like
+
+lift_with_state
+~~~~~~~~~~~~~~~
+
+.. autofunction:: lift_with_state
+
+LiftWithStateUpdater
+~~~~~~~~~~~~~~~~~~~~
+
+.. autoclass:: LiftWithStateUpdater
 
 Optimizations
 -------------

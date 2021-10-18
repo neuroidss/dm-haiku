@@ -14,10 +14,13 @@
 # ==============================================================================
 """Lifting parameters in Haiku."""
 
+import warnings
+
 from absl.testing import absltest
 from haiku._src import base
 from haiku._src import lift
 from haiku._src import module
+from haiku._src import test_utils
 from haiku._src import transform
 import jax
 import jax.numpy as jnp
@@ -33,7 +36,7 @@ class Bias(module.Module):
 
 class LiftTest(absltest.TestCase):
 
-  def test_functionalize(self):
+  def test_lift_with_vmap(self):
     def inner_fn(x):
       assert x.ndim == 1
       return Bias()(x)
@@ -60,6 +63,71 @@ class LiftTest(absltest.TestCase):
     out = outer.apply(outer_params, apply_key, data)
     np.testing.assert_equal(out, 2 * np.ones((3, 2)))
 
+  @test_utils.transform_and_run
+  def test_empty_lift(self):
+    f = transform.transform(lambda: None)
+    self.assertEmpty(lift.lift(f.init)(None))
+
+  @test_utils.transform_and_run
+  def test_empty_lift_with_state(self):
+    f = transform.transform_with_state(lambda: None)
+    init_fn, updater = lift.lift_with_state(f.init)
+    params, state = init_fn(None)
+    self.assertEmpty(params)
+    self.assertEmpty(state)
+    updater.ignore_update()
+
+  @test_utils.transform_and_run
+  def test_unused_updater(self):
+    def f() -> lift.LiftWithStateUpdater:
+      f = transform.transform_with_state(lambda: None)
+      return lift.lift_with_state(f.init)[1]
+
+    with self.assertWarnsRegex(Warning, "StateUpdater.*must be used"):
+      f()
+
+    with warnings.catch_warnings(record=True) as caught_warnings:
+      f().update({})
+      f().ignore_update()
+    self.assertEmpty(caught_warnings)
+
+  @test_utils.transform_and_run(run_apply=False)
+  def test_lift_raises_with_state(self):
+    f = transform.transform_with_state(
+        lambda: base.get_state("w", [], init=jnp.zeros))
+    lifted = lift.lift(f.init)  # pytype: disable=wrong-arg-types
+    with self.assertRaisesRegex(ValueError, "use.*lift_with_state"):
+      lifted(None)
+
+  def test_lift_with_state(self):
+    def inner():
+      w = base.get_state("w", [], init=jnp.zeros)
+      w += 1
+      base.set_state("w", w)
+      return w
+
+    inner = transform.transform_with_state(inner)
+
+    def outer():
+      lifted, updater = lift.lift_with_state(inner.init)
+      params, state = lifted(None)
+      self.assertEmpty(params)
+      # NOTE: Value is always initial.
+      self.assertEqual(state, {"~": {"w": 0}})
+      out, state = inner.apply(params, state, None)
+      updater.update(state)
+      return out, state
+
+    outer = transform.transform_with_state(outer)
+    params, state = outer.init(None)
+    self.assertEmpty(params)
+    self.assertEqual(jax.tree_map(int, state), {"lifted/~": {"w": 0}})
+
+    (w, inner_state), state = outer.apply(params, state, None)
+    del inner_state
+    self.assertEqual(w, 1)
+    self.assertEmpty(params)
+    self.assertEqual(state, {"lifted/~": {"w": 1}})
 
 if __name__ == "__main__":
   absltest.main()

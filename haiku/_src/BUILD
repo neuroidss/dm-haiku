@@ -343,6 +343,7 @@ hk_py_test(
         ":base",
         ":lift",
         ":module",
+        ":test_utils",
         ":transform",
         # pip: absl/testing:absltest
         # pip: jax
