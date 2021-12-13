@@ -46,9 +46,9 @@ DIMENSION_NUMBERS_NCSPATIAL = {
 }
 
 
-class DepthwiseConv2D(hk.Module):
-  """2-D Depthwise Convolution Module."""
-  # TODO(tycai): Generalize to ConvND.
+class DepthwiseConvND(hk.Module):
+  """N-D Depthwise Convolution Module."""
+  num_spatial_dims = None
 
   def __init__(
       self,
@@ -83,18 +83,18 @@ class DepthwiseConv2D(hk.Module):
       name: The name of the module.
     """
     super().__init__(name=name)
-    self.kernel_shape = utils.replicate(kernel_shape, 2, "kernel_shape")
+    self.kernel_shape = utils.replicate(kernel_shape, self.num_spatial_dims,
+                                        "kernel_shape")
     self.lhs_dilation = (1,) * len(self.kernel_shape)
     self.rhs_dilation = (1,) * len(self.kernel_shape)
     self.channel_multiplier = channel_multiplier
     self.padding = padding
-    self.stride = utils.replicate(stride, 2, "strides")
+    self.stride = utils.replicate(stride, self.num_spatial_dims, "strides")
     self.data_format = data_format
     self.channel_index = utils.get_channel_index(data_format)
     self.with_bias = with_bias
     self.w_init = w_init
     self.b_init = b_init or jnp.zeros
-    self.num_spatial_dims = 2
     if self.channel_index == -1:
       self.dn = DIMENSION_NUMBERS[self.num_spatial_dims]
     else:
@@ -194,3 +194,14 @@ class SeparableDepthwiseConv2D(hk.Module):
   def __call__(self, inputs: jnp.ndarray) -> jnp.ndarray:
     return self._conv2(self._conv1(inputs))
 
+
+class DepthwiseConv1D(DepthwiseConvND):
+  num_spatial_dims = 1
+
+
+class DepthwiseConv2D(DepthwiseConvND):
+  num_spatial_dims = 2
+
+
+class DepthwiseConv3D(DepthwiseConvND):
+  num_spatial_dims = 3
